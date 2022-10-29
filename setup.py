@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 
 def _process_requirements():
-    packages = open('requirements.txt').read().strip().split('\n')
+    packages = open('config/requirements.txt').read().strip().split('\n')
     return [pkg for pkg in packages]
 
 setup(
