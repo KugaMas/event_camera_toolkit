@@ -11,6 +11,7 @@ setup(
     version='1.0.0',
     author='KugaMax',
     description="simple toolkit for event-based data",
+    py_modules=['kutils'],
     packages=find_packages(),
     python_requires='>=3.8',
     install_requires=_process_requirements()
