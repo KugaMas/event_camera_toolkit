@@ -1,67 +1,76 @@
+import os
+import time
 import numpy as np
 import pandas as pd
-
-from dv import AedatFile
+from dv import AedatFile, Event, Frame, Trigger, IMU
 from numpy.lib import recfunctions as rfn
 
 
-class _struct():
+class _data():
     def __init__(self) -> None:
-        pass
+        self._data = {
+            'size': None,
+            'events': None,
+            'frames': None,
+            'imu':    None,
+            'triggers': None,
+        }
     
-    def __bool__(self):
-        return len(vars(self)) > 0
+    def __getitem__(self, _name):
+        return self._data[_name]
 
-def _data():
-
-    data = {
-        'events': _struct(),
-        'frames': _struct(),
-        'imu':    _struct(),
-    }
-    data['events'].size = None
-    data['frames'].size = None
-
-    return data
+    def __setitem__(self, _name, _value):
+        if type(_value) is np.ndarray and _value.dtype.names is not None:
+            _value = np.rec.array(_value)
+        self._data[_name] = _value
 
 
-def load_aedat4(path, use_aps=True, use_imu=True):
+def load_aedat4(path):
     data = _data()
 
-    # events
     with AedatFile(path) as f:
-        data['events'].size = f['events'].size
-        events = np.hstack([packet for packet in f['events'].numpy()])
-        events = rfn.structured_to_unstructured(events)
-    data['events'].ts = events[:, 0]
-    data['events'].x  = events[:, 1]
-    data['events'].y  = events[:, 2]
-    data['events'].p  = events[:, 3]
+        data['size'] = f['events'].size
 
-    # frames
-    if use_aps:
-        with AedatFile(path) as f:
-            data['frames'].size = f['frames'].size
-            frames = [frame for frame in f['frames']]
-        data['frames'].ts = [frame.timestamp for frame in frames]
-        data['frames'].image = [frame.image for frame in frames]
+        # events
+        if 'events' in f.names:
+            events = np.hstack([packet for packet in f['events'].numpy()])
+            events_type = [('timestamp', '<i8'), ('x', '<i2'),('y', '<i2'), ('polarity', 'i1')]
+            events = np.array(rfn.drop_fields(events, ['_p1', '_p2']), dtype=events_type)
+            data['events'] = events
+
+        # frames
+        if 'frames' in f.names:
+            frames = [(frame.timestamp, frame.image) for frame in f['frames']]
+            frames_type = [('timestamp', '<i8'), ('image','i2', frames[0][1].shape)]
+            frames = np.array(frames, dtype=frames_type)
+            data['frames'] = frames
 
     return data
 
 
-def load_txt(path, use_aps=False, use_imu=False):
+def load_txt(path):
     data = _data()
 
     # events
     with open(path, "r+") as f:
-        events = pd.read_csv(f, sep='\s+', header=None, skiprows=[0],
-                            dtype={'0': np.float32, '1': np.int8, '2': np.int8, '3': np.int8})
-        events = np.array(events).astype(np.uint64)
-    data['events'].ts = events[:, 0]
-    data['events'].x  = events[:, 1]
-    data['events'].y  = events[:, 2]
-    data['events'].p  = events[:, 3]
-    with open(path, "r+") as f:
-        data['events'].size = tuple(np.loadtxt(f, max_rows=1).astype(np.int_))
+        data['size'] = tuple(np.loadtxt(f, max_rows=1).astype(np.int_))
+        events = pd.read_csv(f, sep='\s+', header=None)
+        events_type = [('timestamp', '<i8'), ('x', '<i2'),('y', '<i2'), ('polarity', 'i1')]
+        events = np.array(events, dtype=events_type)
+        data['events'] = events
     
     return data
+
+
+if __name__ == '__main__':
+    main_dir = os.path.dirname(__file__)
+    os.chdir(main_dir)
+
+    st = time.time()
+    data = load_aedat4(os.path.join(main_dir, "tests/demo-01.aedat4"))
+    print(f"load aedat4 file ==> {time.time() - st} s")
+
+    st = time.time()
+    data = load_txt(os.path.join(main_dir, "tests/demo-02.txt"))
+    print(f"load txt file ==> {time.time() - st} s")
+

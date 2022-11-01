@@ -11,10 +11,10 @@ def _assert(path):
     return extension
 
 
-def load(path, use_aps=False, use_imu=False):
+def load(path):
     extension = _assert(path)
     _load = eval(f'load_{extension[1:]}')
-    data = _load(path, use_aps, use_imu)
+    data = _load(path)
     return data
 
 
